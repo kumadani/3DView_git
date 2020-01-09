@@ -327,11 +327,14 @@ void keyboard(unsigned char key, int x, int y)
             auto msec = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
             printf("%lld & %ld & %f\n",msec,frame,(double)frame/(double)msec*1000);
             
+			colorStream.stop();
+			depthStream.stop();
             userTracker.destroy();
             colorStream.destroy();
             depthStream.destroy();
             nite::NiTE::shutdown();
             openni::OpenNI::shutdown();
+			device.close();
             exit(0);
             break;
         }
@@ -380,7 +383,6 @@ int main(int argc, char *argv[])
 
     const char* deviceURI = openni::ANY_DEVICE;
 
-	openni::OpenNI::initialize();
     openni::Array<openni::DeviceInfo> deviceInfo;
     openni::OpenNI::enumerateDevices(&deviceInfo);
     
@@ -403,6 +405,7 @@ int main(int argc, char *argv[])
     openniRc = device.open(deviceURI);
     if(openniRc != openni::STATUS_OK){
         printf("openni::device::open() failed.");
+		device.close();
         nite::NiTE::shutdown();
         openni::OpenNI::shutdown();
         exit(0);
@@ -413,6 +416,7 @@ int main(int argc, char *argv[])
     if(openniRc != openni::STATUS_OK){
         printf("Couldn't create color stream");
         colorStream.destroy();
+		device.close();
         nite::NiTE::shutdown();
         openni::OpenNI::shutdown();
         exit(0);
@@ -422,6 +426,7 @@ int main(int argc, char *argv[])
         if(openniRc !=openni::STATUS_OK){
             printf("Couldn't start color stream");
             colorStream.destroy();
+			device.close();
             nite::NiTE::shutdown();
             openni::OpenNI::shutdown();
             exit(0);
@@ -435,6 +440,7 @@ int main(int argc, char *argv[])
         printf("Couldn't create depth stream");
         colorStream.destroy();
         depthStream.destroy();
+		device.close();
         nite::NiTE::shutdown();
         openni::OpenNI::shutdown();
         exit(0);
@@ -443,6 +449,7 @@ int main(int argc, char *argv[])
         openniRc = depthStream.start();
         if(openniRc !=openni::STATUS_OK){
             printf("Couldn't start depth stream");
+			colorStream.stop();
             colorStream.destroy();
             depthStream.destroy();
             nite::NiTE::shutdown();
@@ -457,15 +464,18 @@ int main(int argc, char *argv[])
     niteRc = userTracker.create();
     if (niteRc != nite::STATUS_OK){
         printf("Couldn't create user tracker\n");
+		colorStream.stop();
+		depthStream.stop();
         userTracker.destroy();
         colorStream.destroy();
         depthStream.destroy();
+
         nite::NiTE::shutdown();
         openni::OpenNI::shutdown();
         exit(0);
     }
     
-    printf("\nStart moving around to get detected...\n(PSI pose may be required for skeleton calibration, depending on the configuration)\n");
+    printf("\nStart moving around to get detected...\n");
     
     glutInit(&argc, argv);
     glutInitWindowSize(WindowWidth, WindowHeight);

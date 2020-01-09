@@ -384,11 +384,22 @@ int main(int argc, char *argv[])
     openni::Array<openni::DeviceInfo> deviceInfo;
     openni::OpenNI::enumerateDevices(&deviceInfo);
     
-    if(deviceInfo.getSize()==0)
-        printf("hoge\n");
-    else
-        printf("fuga DevInfo=%d\n", deviceInfo.getSize());
-    
+	switch (deviceInfo.getSize())
+	{
+	case 0:
+		printf("Coudn't find device.\n");
+		return 0;
+		break;
+	case 1:
+		printf("find 1 device.\n");
+		break;
+	case 2:
+		printf("find 2 devices.\n");
+		break;
+	default:
+		break;
+	}
+
     openniRc = device.open(deviceURI);
     if(openniRc != openni::STATUS_OK){
         printf("openni::device::open() failed.");

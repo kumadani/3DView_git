@@ -1,0 +1,4 @@
+﻿  main.cpp
+C:\Users\kumadanikazuya\source\repos\kumadani\3DView_git\3DView\main.cpp(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。
+C:\Users\kumadanikazuya\source\repos\kumadani\3DView_git\3DView\main.cpp(235,46): warning C4305: '引数': 'double' から 'GLfloat' へ切り詰めます。
+  3DView.vcxproj -> C:\Users\kumadanikazuya\source\repos\kumadani\3DView_git\x64\Debug\3DView.exe

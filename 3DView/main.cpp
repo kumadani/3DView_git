@@ -32,17 +32,23 @@
 #define WindowHeight 1024
 
 bool Rotation = false;
-unsigned int Front = 0;
+unsigned int Front = 4;
 bool PointCloud = true;
 bool Skelton = true;
+unsigned int DisplayMode = 0;
 
 std::chrono::system_clock::time_point start;
 unsigned long frame = 0;
 
-nite::UserTracker userTracker;
-openni::Device device;
-openni::VideoStream colorStream;
-openni::VideoStream depthStream;
+//nite::UserTracker userTracker,userTracker2;
+//openni::Device device,device2;
+//openni::VideoStream colorStream,colorStream2;
+//openni::VideoStream depthStream,depthStream2;
+nite::UserTracker userTracker[2];
+openni::Device device[2];
+openni::VideoStream colorStream[2];
+openni::VideoStream depthStream[2];
+openni::Array<openni::DeviceInfo> deviceInfo;
 
 #define MAX_USERS 10
 bool g_visibleUsers[MAX_USERS] = {false};
@@ -91,6 +97,21 @@ void updateUserState(const nite::UserData& user, unsigned long long ts)
         }
     }
 }
+
+void Finalize(void) {
+	for (int i = 0;i < deviceInfo.getSize(); i++) {
+		colorStream[i].stop();
+		depthStream[i].stop();
+		userTracker[i].destroy();
+		colorStream[i].destroy();
+		depthStream[i].destroy();
+		nite::NiTE::shutdown();
+		openni::OpenNI::shutdown();
+		device[i].close();
+	}
+	exit(0);
+}
+
 
 void drawLine(nite::SkeletonJoint joint1,nite::SkeletonJoint joint2){
     
@@ -233,6 +254,8 @@ void display(void)
     
     glPushMatrix();
     glScalef(1.0/Scale, 1.0/Scale, 1.0/1000.0);
+
+	/*
     //骨格の表示
     nite::UserTrackerFrameRef userTrackerFrame;
     nite::Status niteRc;
@@ -256,7 +279,35 @@ void display(void)
             }
         }
     }
+	*/
+
+	//骨格の表示
+	nite::UserTrackerFrameRef userTrackerFrame;
+	nite::Status niteRc;
+	for (int i = 0;i<deviceInfo.getSize(); i++) {
+		niteRc = userTracker[i].readFrame(&userTrackerFrame);
+		if (niteRc != nite::STATUS_OK)
+			printf("Get next user frame failed\n");
+
+		if (Skelton == true) {
+			const nite::Array<nite::UserData>& users = userTrackerFrame.getUsers();
+			for (int j = 0; j < users.getSize(); j++)
+			{
+				const nite::UserData& user = users[j];
+				updateUserState(user, userTrackerFrame.getTimestamp());
+				if (user.isNew())
+				{
+					//userTracker[i].startSkeletonTracking(user.getId());
+				}
+				else if (user.getSkeleton().getState() == nite::SKELETON_TRACKED)
+				{
+					drawSkelton(user);
+				}
+			}
+		}
+	}
     
+	/*
     //点群の表示
     openni::VideoFrameRef colorFrame;
     openni::VideoFrameRef depthFrame;
@@ -301,6 +352,8 @@ void display(void)
             }
         }
     }
+	*/
+
     glPopMatrix();
     
     glutSwapBuffers();
@@ -327,15 +380,16 @@ void keyboard(unsigned char key, int x, int y)
             auto msec = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
             printf("%lld & %ld & %f\n",msec,frame,(double)frame/(double)msec*1000);
             
-			colorStream.stop();
-			depthStream.stop();
-            userTracker.destroy();
-            colorStream.destroy();
-            depthStream.destroy();
-            nite::NiTE::shutdown();
-            openni::OpenNI::shutdown();
-			device.close();
-            exit(0);
+			//colorStream.stop();
+			//depthStream.stop();
+            //userTracker.destroy();
+            //colorStream.destroy();
+            //depthStream.destroy();
+            //nite::NiTE::shutdown();
+            //openni::OpenNI::shutdown();
+			//device.close();
+            //exit(0);
+			Finalize();
             break;
         }
         case 'r':
@@ -367,6 +421,7 @@ void init(void)
 
 
 
+
 int main(int argc, char *argv[])
 {
 	
@@ -377,13 +432,15 @@ int main(int argc, char *argv[])
 	
     openni::OpenNI::initialize();
     openni::Status openniRc =openni::STATUS_OK;
-    nite::NiTE::initialize();
-    nite::Status niteRc;
 
 
-    const char* deviceURI = openni::ANY_DEVICE;
 
-    openni::Array<openni::DeviceInfo> deviceInfo;
+    //const char* deviceURI = NULL;
+	const char* deviceURI[2] = { NULL,NULL };
+	//const char* deviceURI2 = NULL;
+
+
+    //openni::Array<openni::DeviceInfo> deviceInfo;
     openni::OpenNI::enumerateDevices(&deviceInfo);
     
 	switch (deviceInfo.getSize())
@@ -394,86 +451,139 @@ int main(int argc, char *argv[])
 		break;
 	case 1:
 		printf("find 1 device.\n");
+		//deviceURI[0] = deviceInfo[0].getUri();
+		deviceURI[0] = deviceInfo[0].getUri();
 		break;
 	case 2:
 		printf("find 2 devices.\n");
+		deviceURI[0] = deviceInfo[0].getUri();
+		deviceURI[1] = deviceInfo[1].getUri();
+		//deviceURI = deviceInfo[0].getUri();
+		//deviceURI2 = deviceInfo[1].getUri();
 		break;
 	default:
 		break;
 	}
 
-    openniRc = device.open(deviceURI);
-    if(openniRc != openni::STATUS_OK){
-        printf("openni::device::open() failed.");
-		device.close();
-        nite::NiTE::shutdown();
-        openni::OpenNI::shutdown();
-        exit(0);
-    }
-    //カラーストリームの生成・開始
-	printf("Create color stream...");
-    openniRc = colorStream.create(device, openni::SENSOR_COLOR);
-    if(openniRc != openni::STATUS_OK){
-        printf("Couldn't create color stream");
-        colorStream.destroy();
-		device.close();
-        nite::NiTE::shutdown();
-        openni::OpenNI::shutdown();
-        exit(0);
-    } else{
-		printf("Success!!\n Start color stream...");
-        openniRc = colorStream.start();
-        if(openniRc !=openni::STATUS_OK){
-            printf("Couldn't start color stream");
-            colorStream.destroy();
-			device.close();
-            nite::NiTE::shutdown();
-            openni::OpenNI::shutdown();
-            exit(0);
-        } else printf("Success!!\n");
-    }
-    
-    //デプスストリームの生成・開始
-	printf("\n\n Create depth stream...");
-	openniRc = depthStream.create(device, openni::SENSOR_DEPTH);
-    if(openniRc != openni::STATUS_OK){
-        printf("Couldn't create depth stream");
-        colorStream.destroy();
-        depthStream.destroy();
-		device.close();
-        nite::NiTE::shutdown();
-        openni::OpenNI::shutdown();
-        exit(0);
-    } else{
-		printf("Success!! \n Start depth stream...");
-        openniRc = depthStream.start();
-        if(openniRc !=openni::STATUS_OK){
-            printf("Couldn't start depth stream");
-			colorStream.stop();
-            colorStream.destroy();
-            depthStream.destroy();
-            nite::NiTE::shutdown();
-            openni::OpenNI::shutdown();
-            exit(0);
+	
+	for (int i = 0; i < deviceInfo.getSize(); i++)
+	{
+		openniRc = device[i].open(deviceURI[i]);
+		if (openniRc != openni::STATUS_OK) {
+			printf("openni::device::open() failed.");
+			//device[i].close();
+			//nite::NiTE::shutdown();
+			//openni::OpenNI::shutdown();
+			//exit(0);
+			Finalize();
 		}
-		else printf("Success!!\n\n");
-    }
-    
-    
-    //ユーザートラッカーの生成
-    niteRc = userTracker.create();
-    if (niteRc != nite::STATUS_OK){
-        printf("Couldn't create user tracker\n");
-		colorStream.stop();
-		depthStream.stop();
-        userTracker.destroy();
-        colorStream.destroy();
-        depthStream.destroy();
+	}
 
-        nite::NiTE::shutdown();
-        openni::OpenNI::shutdown();
-        exit(0);
-    }
+	/*
+	openniRc = device[0].open(deviceURI);
+	if (openniRc != openni::STATUS_OK) {
+		printf("openni::device::open() failed.");
+		//device[i].close();
+		//nite::NiTE::shutdown();
+		//openni::OpenNI::shutdown();
+		//exit(0);
+		Finalize();
+	}
+
+	openniRc = device[1].open(deviceURI2);
+	if (openniRc != openni::STATUS_OK) {
+		printf("openni::device::open() failed.");
+		//device[i].close();
+		//nite::NiTE::shutdown();
+		//openni::OpenNI::shutdown();
+		//exit(0);
+		Finalize();
+	}
+	*/
+	for (int i = 0; i < deviceInfo.getSize(); i++)
+	{
+		//カラーストリームの生成・開始
+		printf("Create color stream...");
+		openniRc = colorStream[i].create(device[i], openni::SENSOR_COLOR);
+		if (openniRc != openni::STATUS_OK) {
+			printf("Couldn't create color stream");
+			//colorStream.destroy();
+			//device.close();
+			//nite::NiTE::shutdown();
+			//openni::OpenNI::shutdown();
+			//exit(0);
+			Finalize();
+		}
+		else {
+			printf("Success!!\n Start color stream...");
+			openniRc = colorStream[i].start();
+			if (openniRc != openni::STATUS_OK) {
+				printf("Couldn't start color stream");
+				//colorStream.destroy();
+				//device.close();
+				//nite::NiTE::shutdown();
+				//openni::OpenNI::shutdown();
+				//exit(0);
+				Finalize();
+			}
+			else printf("Success!!\n");
+		}
+	}
+
+	for (int i = 0; i < deviceInfo.getSize(); i++)
+	{
+		//デプスストリームの生成・開始
+		printf("\n\n Create depth stream...");
+		openniRc = depthStream[i].create(device[i], openni::SENSOR_DEPTH);
+		if (openniRc != openni::STATUS_OK) {
+			printf("Couldn't create depth stream");
+			//colorStream.destroy();
+			//depthStream.destroy();
+			//device.close();
+			//nite::NiTE::shutdown();
+			//openni::OpenNI::shutdown();
+			//exit(0);
+			Finalize();
+		}
+		else {
+			printf("Success!! \n Start depth stream...");
+			openniRc = depthStream[i].start();
+			if (openniRc != openni::STATUS_OK) {
+				printf("Couldn't start depth stream");
+				//colorStream.stop();
+				//colorStream.destroy();
+				//depthStream.destroy();
+				//nite::NiTE::shutdown();
+				//openni::OpenNI::shutdown();
+				//exit(0);
+				Finalize();
+			}
+			else printf("Success!!\n\n");
+		}
+	}
+
+
+	nite::NiTE::initialize();
+	nite::Status niteRc;
+
+
+	for (int i = 0; i < deviceInfo.getSize(); i++)
+	{
+		//ユーザートラッカーの生成
+		niteRc = userTracker[i].create(&device[i]);
+		if (niteRc != nite::STATUS_OK) {
+			printf("Couldn't create user tracker\n");
+			//colorStream.stop();
+			//depthStream.stop();
+			//userTracker.destroy();
+			//colorStream.destroy();
+			//depthStream.destroy();
+			//nite::NiTE::shutdown();
+			//openni::OpenNI::shutdown();
+			//exit(0);
+			Finalize();
+		}
+	}
     
     printf("\nStart moving around to get detected...\n");
     
